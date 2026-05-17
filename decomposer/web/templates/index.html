@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Decomposer</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 720px; margin: 2em auto; padding: 0 1em; }
+    button { padding: 0.5em 1em; font-size: 1em; }
+    #log { font-family: monospace; background: #f4f4f4; padding: 1em; min-height: 200px; white-space: pre-wrap; }
+    .stage { color: #06c; }
+    .done { color: #060; font-weight: bold; }
+    .err { color: #c00; }
+  </style>
+</head>
+<body>
+  <h1>Decomposer</h1>
+  <label>Sample image:
+    <select id="sample">
+      <option value="sample_ad_1.png">sample_ad_1</option>
+      <option value="sample_ad_2.png">sample_ad_2</option>
+      <option value="tiny_smoke_test.png">tiny_smoke_test (256px)</option>
+    </select>
+  </label>
+  <label>Layers: <input id="layers" type="number" value="6" min="2" max="12"></label>
+  <label>Resolution: <input id="res" type="number" value="640"></label>
+  <label>Steps: <input id="steps" type="number" value="8"></label>
+  <p><button id="go">Decompose</button></p>
+  <div id="log"></div>
+  <p id="dl"></p>
+  <script>
+    const log = document.getElementById('log');
+    const dl = document.getElementById('dl');
+    function append(line, cls) {
+      const span = document.createElement('div');
+      if (cls) span.className = cls;
+      span.textContent = line;
+      log.appendChild(span);
+    }
+    document.getElementById('go').onclick = async () => {
+      log.textContent = '';
+      dl.textContent = '';
+      const body = {
+        sample: document.getElementById('sample').value,
+        layers: +document.getElementById('layers').value,
+        resolution: +document.getElementById('res').value,
+        steps: +document.getElementById('steps').value,
+      };
+      const r = await fetch('/jobs', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+      const j = await r.json();
+      append('Job ' + j.job_id + ' started');
+      const es = new EventSource(j.stream);
+      es.addEventListener('stage_started', e => append('> ' + JSON.parse(e.data).name, 'stage'));
+      es.addEventListener('stage_ended', e => {
+        const p = JSON.parse(e.data);
+        append('OK ' + p.name + ' (' + p.wall_ms.toFixed(0) + ' ms)');
+      });
+      es.addEventListener('done', () => {
+        append('Done.', 'done');
+        dl.innerHTML = '<a href="/jobs/' + j.job_id + '/zip">Download ZIP</a>';
+        es.close();
+      });
+      es.addEventListener('error', e => { append('Error: ' + e.data, 'err'); es.close(); });
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+experiments:
+  - id: lightning-lora-4step
+    description: "Load lightx2v Lightning-8steps LoRA, run at 4 steps with CFG=1"
+    apply:
+      kind: lora_load
+      repo: lightx2v/Qwen-Image-Lightning
+      filename: Qwen-Image-Lightning-8steps-V2.0.safetensors
+      scale: 1.0
+    overrides:
+      steps: 4
+      true_cfg_scale: 1.0
+    predicted_delta:
+      denoise_loop.wall_ms: -50%
+    quality_bounds:
+      composite_ssim_min: 0.60
+      per_layer_ssim_min: 0.50
+
+  - id: unipc-scheduler
+    description: "UniPCMultistepScheduler instead of FlowMatchEuler, 8 steps"
+    apply:
+      kind: scheduler_swap
+      scheduler_class: UniPCMultistepScheduler
+    overrides:
+      steps: 8
+    predicted_delta:
+      denoise_step.gpu_ms: -10%
+    quality_bounds:
+      composite_ssim_min: 0.60
+      per_layer_ssim_min: 0.50
+
+  - id: bnb-text-encoder
+    description: "Text encoder via unsloth/Qwen2.5-VL-7B-Instruct-bnb-4bit"
+    apply:
+      kind: setting_change
+      text_encoder_repo: unsloth/Qwen2.5-VL-7B-Instruct-bnb-4bit
+    predicted_delta:
+      load_text_encoder.mps_alloc_peak_mb: -10000
+      load_text_encoder.wall_ms: -50%
+    quality_bounds:
+      composite_ssim_min: 0.60
+      per_layer_ssim_min: 0.50
+
+  - id: q5km-dit
+    description: "DiT to Q5_K_M GGUF (port k-quant dequant to GgufLinear)"
+    apply:
+      kind: code_patch
+      patches:
+        - port_q5km_dequant
+        - swap_gguf_file_to_q5km
+    predicted_delta:
+      load_dit.mps_alloc_peak_mb: -7000
+    quality_bounds:
+      composite_ssim_min: 0.60
+      per_layer_ssim_min: 0.50
+
+  - id: q4km-dit
+    description: "DiT to Q4_K_M GGUF (port k-quant dequant + Q4_K_M file)"
+    apply:
+      kind: code_patch
+      patches:
+        - port_q4km_dequant
+        - swap_gguf_file_to_q4km
+    predicted_delta:
+      load_dit.mps_alloc_peak_mb: -8500
+    quality_bounds:
+      composite_ssim_min: 0.60
+      per_layer_ssim_min: 0.50
+
+  - id: keep-warm
+    description: "Hold all 3 models resident permanently (requires Q4 to fit budget)"
+    apply:
+      kind: code_patch
+      patches:
+        - keep_warm_residency_replacement
+    predicted_delta:
+      load_text_encoder.wall_ms: -100%
+      load_dit.wall_ms: -100%
+      load_vae.wall_ms: -100%
+    quality_bounds:
+      composite_ssim_min: 0.60
+      per_layer_ssim_min: 0.50
+
+  - id: fb-cache-8step
+    description: "diffusers FirstBlockCache at threshold 0.08 (8-step only)"
+    apply:
+      kind: code_patch
+      patches:
+        - apply_first_block_cache_threshold_0_08
+    overrides:
+      steps: 8
+    predicted_delta:
+      denoise_loop.wall_ms: -30%
+    quality_bounds:
+      composite_ssim_min: 0.60
+      per_layer_ssim_min: 0.50
+
+  - id: pre-allocate-latents
+    description: "Reuse latent tensor across denoise loop instead of reallocating"
+    apply:
+      kind: code_patch
+      patches:
+        - pre_allocate_denoise_latent
+    predicted_delta:
+      denoise_step.wall_ms: -3%
+    quality_bounds:
+      composite_ssim_min: 0.60
+      per_layer_ssim_min: 0.50
+
+  - id: torch-compile-probe
+    description: "torch.compile(transformer, mode='reduce-overhead') — measure graph breaks"
+    apply:
+      kind: code_patch
+      patches:
+        - apply_torch_compile_to_transformer
+    predicted_delta:
+      denoise_step.wall_ms: -10%
+    quality_bounds:
+      composite_ssim_min: 0.60
+      per_layer_ssim_min: 0.50
+
+  - id: mps-empty-cache-tuning
+    description: "torch.mps.empty_cache() placement between stages"
+    apply:
+      kind: code_patch
+      patches:
+        - empty_cache_between_stages
+    predicted_delta:
+      denoise_loop.wall_ms: -2%
+    quality_bounds:
+      composite_ssim_min: 0.60
+      per_layer_ssim_min: 0.50

@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+runs/
+dist/
+*.egg-info/
+*.safetensors
+*.gguf
+mlx-weights/
+mlx-weights-8bit/
+out/
+.env
+test_image.jpg
+worktrees/

@@ -1,0 +1,14 @@
+.git
+.venv
+.pytest_cache
+.ruff_cache
+runs
+docs
+tests
+.env
+.env.local
+__pycache__
+*.pyc
+*.gguf
+*.safetensors
+test_image.jpg
